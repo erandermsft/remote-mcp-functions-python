@@ -33,8 +33,8 @@ var baseAppSettings = {
   AzureWebJobsStorage__clientId: identityClientId
   
   // Application Insights settings are always included
-  APPLICATIONINSIGHTS_AUTHENTICATION_STRING: applicationInsightsIdentity
-  APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights.properties.ConnectionString
+  // APPLICATIONINSIGHTS_AUTHENTICATION_STRING: applicationInsightsIdentity
+  // APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights?.properties.ConnectionString
 }
 
 // Dynamically build storage endpoint settings based on feature flags

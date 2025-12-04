@@ -12,37 +12,41 @@ param appSubnetName string = 'app'
 
 param tags object = {}
 
-// Migrated to use AVM module instead of direct resource declaration
-module virtualNetwork 'br/public:avm/res/network/virtual-network:0.6.1' = {
-  name: 'vnet-deployment'
-  params: {
-    // Required parameters
-    name: vNetName
-    addressPrefixes: [
-      '10.0.0.0/16'
-    ]
-    // Non-required parameters
-    location: location
-    tags: tags
-    subnets: [
-      {
-        name: peSubnetName
-        addressPrefix: '10.0.1.0/24'
-        privateEndpointNetworkPolicies: 'Disabled'
-        privateLinkServiceNetworkPolicies: 'Enabled'
-      }
-      {
-        name: appSubnetName
-        addressPrefix: '10.0.2.0/24'
-        privateEndpointNetworkPolicies: 'Disabled'
-        privateLinkServiceNetworkPolicies: 'Enabled'
-        delegation: 'Microsoft.App/environments'
-      }
-    ]
-  }
+resource existingVnet 'Microsoft.Network/virtualNetworks@2025-01-01' existing = if (!empty(vNetName)) {
+  name: vNetName
 }
 
+// Migrated to use AVM module instead of direct resource declaration
+// module virtualNetwork 'br/public:avm/res/network/virtual-network:0.6.1' = {
+//   name: 'vnet-deployment'
+//   params: {
+//     // Required parameters
+//     name: vNetName
+//     addressPrefixes: [
+//       '10.0.0.0/16'
+//     ]
+//     // Non-required parameters
+//     location: location
+//     tags: tags
+//     subnets: [
+//       {
+//         name: peSubnetName
+//         addressPrefix: '10.0.1.0/24'
+//         privateEndpointNetworkPolicies: 'Disabled'
+//         privateLinkServiceNetworkPolicies: 'Enabled'
+//       }
+//       {
+//         name: appSubnetName
+//         addressPrefix: '10.0.2.0/24'
+//         privateEndpointNetworkPolicies: 'Disabled'
+//         privateLinkServiceNetworkPolicies: 'Enabled'
+//         delegation: 'Microsoft.App/environments'
+//       }
+//     ]
+//   }
+// }
+
 output peSubnetName string = peSubnetName
-output peSubnetID string = '${virtualNetwork.outputs.resourceId}/subnets/${peSubnetName}'
+output peSubnetID string = resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, peSubnetName)
 output appSubnetName string = appSubnetName
-output appSubnetID string = '${virtualNetwork.outputs.resourceId}/subnets/${appSubnetName}'
+output appSubnetID string = resourceId('Microsoft.Network/virtualNetworks/subnets', vNetName, appSubnetName)

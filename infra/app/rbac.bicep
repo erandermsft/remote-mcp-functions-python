@@ -88,23 +88,23 @@ resource tableRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-
 }
 
 // Role assignment for Application Insights - Managed Identity
-resource appInsightsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(applicationInsights.id, managedIdentityPrincipalId, monitoringRoleDefinitionId) // Use managed identity ID
-  scope: applicationInsights
-  properties: {
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', monitoringRoleDefinitionId)
-    principalId: managedIdentityPrincipalId // Use managed identity ID
-    principalType: 'ServicePrincipal' // Managed Identity is a Service Principal
-  }
-}
+// resource appInsightsRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   name: guid(applicationInsights.id, managedIdentityPrincipalId, monitoringRoleDefinitionId) // Use managed identity ID
+//   scope: applicationInsights
+//   properties: {
+//     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', monitoringRoleDefinitionId)
+//     principalId: managedIdentityPrincipalId // Use managed identity ID
+//     principalType: 'ServicePrincipal' // Managed Identity is a Service Principal
+//   }
+// }
 
-// Role assignment for Application Insights - User Identity
-resource appInsightsRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (allowUserIdentityPrincipal && !empty(userIdentityPrincipalId)) {
-  name: guid(applicationInsights.id, userIdentityPrincipalId, monitoringRoleDefinitionId)
-  scope: applicationInsights
-  properties: {
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', monitoringRoleDefinitionId)
-    principalId: userIdentityPrincipalId // Use user identity ID
-    principalType: 'User' // User Identity is a User Principal
-  }
-}
+// // Role assignment for Application Insights - User Identity
+// resource appInsightsRoleAssignment_User 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (allowUserIdentityPrincipal && !empty(userIdentityPrincipalId)) {
+//   name: guid(applicationInsights.id, userIdentityPrincipalId, monitoringRoleDefinitionId)
+//   scope: applicationInsights
+//   properties: {
+//     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', monitoringRoleDefinitionId)
+//     principalId: userIdentityPrincipalId // Use user identity ID
+//     principalType: 'User' // User Identity is a User Principal
+//   }
+// }
