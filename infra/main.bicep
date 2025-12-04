@@ -1,4 +1,4 @@
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
 @minLength(1)
 @maxLength(64)
@@ -59,9 +59,10 @@ param vNetName string
 param vNetRGName string
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed.')
 param principalId string = deployer().objectId
-@description('Specifies the name of the subnet for Function App virtual network integration.')
-param appSubnetName string
-param peSubnetName string
+@description('Specifies the resource ID of the subnet for Function App virtual network integration.')
+param appSubnetResourceId string
+@description('Specifies the resource ID of the subnet for the Private Endpoint.')
+param peSubnetResourceId string
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
@@ -69,21 +70,21 @@ var functionAppName = !empty(apiServiceName) ? apiServiceName : '${abbrs.webSite
 var deploymentStorageContainerName = 'app-package-${take(functionAppName, 32)}-${take(toLower(uniqueString(functionAppName, resourceToken)), 7)}'
 
 // Organize resources in a resource group
-resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
-  location: location
-  tags: tags
-}
+// resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
+//   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
+//   location: location
+//   tags: tags
+// }
 
-resource vnetrg 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (vnetEnabled) {
-  name: vNetRGName
-}
+// resource vnetrg 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (vnetEnabled) {
+//   name: vNetRGName
+// }
 
 // User assigned managed identity to be used by the function app to reach storage and other dependencies
 // Assign specific roles to this identity in the RBAC module
 module apiUserAssignedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.1' = {
   name: 'apiUserAssignedIdentity'
-  scope: rg
+  // scope: rg
   params: {
     location: location
     tags: tags
@@ -94,7 +95,7 @@ module apiUserAssignedIdentity 'br/public:avm/res/managed-identity/user-assigned
 // Create an App Service Plan to group applications under the same payment plan and SKU
 module appServicePlan 'br/public:avm/res/web/serverfarm:0.1.1' = {
   name: 'appserviceplan'
-  scope: rg
+ // scope: rg
   params: {
     name: !empty(appServicePlanName) ? appServicePlanName : '${abbrs.webServerFarms}${resourceToken}'
     sku: {
@@ -109,7 +110,7 @@ module appServicePlan 'br/public:avm/res/web/serverfarm:0.1.1' = {
 
 module api './app/api.bicep' = {
   name: 'api'
-  scope: rg
+ // scope: rg
   params: {
     name: functionAppName
     location: location
@@ -127,14 +128,14 @@ module api './app/api.bicep' = {
     identityClientId: apiUserAssignedIdentity.outputs.clientId
     appSettings: {
     }
-    virtualNetworkSubnetId: vnetEnabled ? serviceVirtualNetwork.outputs.appSubnetID : ''
+    virtualNetworkSubnetId: vnetEnabled ? appSubnetResourceId : ''
   }
 }
 
 // Backing storage for Azure functions backend API
 module storage './app/storage.bicep' = {
   name: 'storage'
-  scope: rg
+//  scope: rg
   params: {
     location: location
     tags: tags
@@ -160,7 +161,7 @@ var storageEndpointConfig = {
 // Consolidated Role Assignments
 module rbac 'app/rbac.bicep' = {
   name: 'rbacAssignments'
-  scope: rg
+  //scope: rg
   params: {
     storageAccountName: storage.outputs.storageAccountName
     appInsightsName: ''
@@ -175,26 +176,26 @@ module rbac 'app/rbac.bicep' = {
 }
 
 // Virtual Network & private endpoint to blob storage
-module serviceVirtualNetwork 'app/vnet.bicep' =  if (vnetEnabled) {
-  name: 'serviceVirtualNetwork'
-  scope: vnetrg
-  params: {
-    location: location
-    appSubnetName: appSubnetName
-    peSubnetName: peSubnetName
-    tags: tags
-    vNetName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
-  }
-}
+// module serviceVirtualNetwork 'app/vnet.bicep' =  if (vnetEnabled) {
+//   name: 'serviceVirtualNetwork'
+//   //scope: vnetrg
+//   params: {
+//     location: location
+//     appSubnetName: appSubnetName
+//     peSubnetName: peSubnetName
+//     tags: tags
+//     vNetName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
+//   }
+// }
 
 module storagePrivateEndpoint 'app/storage-PrivateEndpoint.bicep' = if (vnetEnabled) {
   name: 'servicePrivateEndpoint'
-  scope: rg
+ // scope: rg
   params: {
     location: location
     tags: tags
     virtualNetworkName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
-    subnetName: vnetEnabled ? serviceVirtualNetwork.outputs.peSubnetName : '' // Keep conditional check for safety, though module won't run if !vnetEnabled
+    subnetResourceId: vnetEnabled ?  peSubnetResourceId : '' // Keep conditional check for safety, though module won't run if !vnetEnabled
     resourceName: storage.outputs.storageAccountName
     enableBlob: storageEndpointConfig.enableBlob
     enableQueue: storageEndpointConfig.enableQueue

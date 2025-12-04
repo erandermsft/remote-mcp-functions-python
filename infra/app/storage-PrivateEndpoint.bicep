@@ -1,6 +1,6 @@
 param virtualNetworkName string
 param virtualNetworkResourceGroup string
-param subnetName string
+param subnetResourceId string
 @description('Specifies the storage account resource name')
 param resourceName string
 param location string = resourceGroup().location
@@ -9,10 +9,10 @@ param enableBlob bool = true
 param enableQueue bool = false
 param enableTable bool = false
 
-resource vnet 'Microsoft.Network/virtualNetworks@2021-08-01' existing = {
-  name: virtualNetworkName
-  scope: resourceGroup(virtualNetworkResourceGroup)
-}
+// resource vnet 'Microsoft.Network/virtualNetworks@2021-08-01' existing = {
+//   name: virtualNetworkName
+//   scope: resourceGroup(virtualNetworkResourceGroup)
+// }
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' existing = {
   name: resourceName
@@ -30,7 +30,7 @@ module blobPrivateEndpoint 'br/public:avm/res/network/private-endpoint:0.11.0' =
     name: 'blob-private-endpoint'
     location: location
     tags: tags
-    subnetResourceId: resourceId(virtualNetworkResourceGroup, 'Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, subnetName)
+    subnetResourceId: subnetResourceId
     privateLinkServiceConnections: [
       {
         name: 'blobPrivateLinkConnection'
@@ -64,7 +64,7 @@ module queuePrivateEndpoint 'br/public:avm/res/network/private-endpoint:0.11.0' 
     name: 'queue-private-endpoint'
     location: location
     tags: tags
-    subnetResourceId: resourceId(virtualNetworkResourceGroup, 'Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, subnetName)
+    subnetResourceId: subnetResourceId
     privateLinkServiceConnections: [
       {
         name: 'queuePrivateLinkConnection'
@@ -98,7 +98,7 @@ module tablePrivateEndpoint 'br/public:avm/res/network/private-endpoint:0.11.0' 
     name: 'table-private-endpoint'
     location: location
     tags: tags
-    subnetResourceId: resourceId(virtualNetworkResourceGroup, 'Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, subnetName)
+    subnetResourceId: subnetResourceId
     privateLinkServiceConnections: [
       {
         name: 'tablePrivateLinkConnection'
