@@ -27,31 +27,67 @@ param identityType string = 'UserAssigned'
 var applicationInsightsIdentity = 'ClientId=${identityClientId};Authorization=AAD'
 var kind = 'functionapp,linux'
 
-// Create base application settings
-var baseAppSettings = {
-  // Only include required credential settings unconditionally
-  AzureWebJobsStorage__credential: 'managedidentity'
-  AzureWebJobsStorage__clientId: identityClientId
-  
-  // Application Insights settings are always included
-  // APPLICATIONINSIGHTS_AUTHENTICATION_STRING: applicationInsightsIdentity
-  // APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights?.properties.ConnectionString
-}
+// Create base application settings (NameValuePair[])
+var baseAppSettings = [
+  {
+    name: 'AzureWebJobsStorage__credential'
+    value: 'managedidentity'
+  }
+  {
+    name: 'AzureWebJobsStorage__clientId'
+    value: identityClientId
+  }
+  // Application Insights settings are always included when provided
+  // {
+  //   name: 'APPLICATIONINSIGHTS_AUTHENTICATION_STRING'
+  //   value: applicationInsightsIdentity
+  // }
+  // {
+  //   name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+  //   value: applicationInsights?.properties.ConnectionString
+  // }
+]
+
+// User supplied settings converted to NameValuePair[]
+var userAppSettings = [for setting in items(appSettings): {
+  name: setting.key
+  value: setting.value
+}]
 
 // Dynamically build storage endpoint settings based on feature flags
-var blobSettings = enableBlob ? { AzureWebJobsStorage__blobServiceUri: stg.properties.primaryEndpoints.blob } : {}
-var queueSettings = enableQueue ? { AzureWebJobsStorage__queueServiceUri: stg.properties.primaryEndpoints.queue } : {}
-var tableSettings = enableTable ? { AzureWebJobsStorage__tableServiceUri: stg.properties.primaryEndpoints.table } : {}
-var fileSettings = enableFile ? { AzureWebJobsStorage__fileServiceUri: stg.properties.primaryEndpoints.file } : {}
+var blobSettings = enableBlob ? [
+  {
+    name: 'AzureWebJobsStorage__blobServiceUri'
+    value: stg.properties.primaryEndpoints.blob
+  }
+] : []
+var queueSettings = enableQueue ? [
+  {
+    name: 'AzureWebJobsStorage__queueServiceUri'
+    value: stg.properties.primaryEndpoints.queue
+  }
+] : []
+var tableSettings = enableTable ? [
+  {
+    name: 'AzureWebJobsStorage__tableServiceUri'
+    value: stg.properties.primaryEndpoints.table
+  }
+] : []
+var fileSettings = enableFile ? [
+  {
+    name: 'AzureWebJobsStorage__fileServiceUri'
+    value: stg.properties.primaryEndpoints.file
+  }
+] : []
 
-// Merge all app settings
-var allAppSettings = union(
-  appSettings,
+// Merge all app settings arrays
+var allAppSettings = concat(
+  userAppSettings,
+  baseAppSettings,
   blobSettings,
   queueSettings,
   tableSettings,
-  fileSettings,
-  baseAppSettings
+  fileSettings
 )
 
 resource stg 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
@@ -63,23 +99,31 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
 }
 
 
-// Create a Flex Consumption Function App to host the API
-module api 'br/public:avm/res/web/site:0.15.1' = {
-  name: '${serviceName}-flex-consumption'
-  params: {
-    kind: kind
-    name: name
-    location: location
-    tags: union(tags, { 'azd-service-name': serviceName })
-    serverFarmResourceId: appServicePlanId
-    publicNetworkAccess: 'Disabled'
+resource api 'Microsoft.Web/sites@2025-03-01' = {
+  name: name
+  location: location
+  tags: union(tags, { 'azd-service-name': serviceName })
+  kind: kind
+  identity: identityType == 'SystemAssigned' ? {
+    type: 'SystemAssigned'
+  } : {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${identityId}': {}
+    }
+  }
+  properties: {
+    serverFarmId: appServicePlanId
     httpsOnly: true
-    storageAccountUseIdentityAuthentication: true
-    managedIdentities: {
-      systemAssigned: identityType == 'SystemAssigned'
-      userAssignedResourceIds: [
-        '${identityId}'
-      ]
+    publicNetworkAccess: 'Disabled'
+    outboundVnetRouting: {
+      allTraffic: true
+    }
+    virtualNetworkSubnetId: !empty(virtualNetworkSubnetId) ? virtualNetworkSubnetId : null
+    siteConfig: {
+      alwaysOn: false
+      appSettings: allAppSettings
+      
     }
     functionAppConfig: {
       deployment: {
@@ -88,7 +132,7 @@ module api 'br/public:avm/res/web/site:0.15.1' = {
           value: '${stg.properties.primaryEndpoints.blob}${deploymentStorageContainerName}'
           authentication: {
             type: identityType == 'SystemAssigned' ? 'SystemAssignedIdentity' : 'UserAssignedIdentity'
-            userAssignedIdentityResourceId: identityType == 'UserAssigned' ? identityId : '' 
+            userAssignedIdentityResourceId: identityType == 'UserAssigned' ? identityId : ''
           }
         }
       }
@@ -101,47 +145,34 @@ module api 'br/public:avm/res/web/site:0.15.1' = {
         version: runtimeVersion
       }
     }
-    siteConfig: {
-      alwaysOn: false
-    }
-    virtualNetworkSubnetId: !empty(virtualNetworkSubnetId) ? virtualNetworkSubnetId : null
-    appSettingsKeyValuePairs: allAppSettings
   }
 }
 
-module apiPrivateEndpoint 'br/public:avm/res/network/private-endpoint:0.11.0' = {
-  name: 'func-private-endpoint-deployment'
-  params: {
-    name: 'func-private-endpoint'
-    location: location
-    tags: tags
-    subnetResourceId: subnetResourceId
+
+
+resource apiPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = {
+  name: 'func-private-endpoint'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: subnetResourceId
+    }
     privateLinkServiceConnections: [
       {
         name: 'funcPrivateLinkConnection'
         properties: {
-          privateLinkServiceId: api.outputs.resourceId
+          privateLinkServiceId: api.id
           groupIds: [
             'sites'
           ]
         }
       }
     ]
-    customDnsConfigs: []
-    privateDnsZoneGroup: null
-    // Creates private DNS zone and links
-    // privateDnsZoneGroup: {
-    //   name: 'blobPrivateDnsZoneGroup'
-    //   privateDnsZoneGroupConfigs: [
-    //     {
-    //       name: 'storageBlobARecord'
-    //       privateDnsZoneResourceId: enableBlob ? privateDnsZoneBlobDeployment.outputs.resourceId : ''
-    //     }
-    //   ]
-    // }
+    customNetworkInterfaceName: 'func-private-endpoint-nic'
   }
 }
 
-output SERVICE_API_NAME string = api.outputs.name
-// Ensure output is always string, handle potential null from module output if SystemAssigned is not used
-output SERVICE_API_IDENTITY_PRINCIPAL_ID string = identityType == 'SystemAssigned' ? api.outputs.?systemAssignedMIPrincipalId ?? '' : ''
+output SERVICE_API_NAME string = api.name
+output SERVICE_API_IDENTITY_PRINCIPAL_ID string = identityType == 'SystemAssigned' ? api.identity.principalId : ''
+output SERVICE_API_RESOURCE_ID string = api.id
