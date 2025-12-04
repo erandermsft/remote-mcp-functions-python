@@ -120,6 +120,7 @@ module api './app/api.bicep' = {
     runtimeName: 'python'
     runtimeVersion: '3.13'
     storageAccountName: storage.outputs.storageAccountName
+    subnetResourceId: peSubnetResourceId
     enableBlob: storageEndpointConfig.enableBlob
     enableQueue: storageEndpointConfig.enableQueue
     enableTable: storageEndpointConfig.enableTable

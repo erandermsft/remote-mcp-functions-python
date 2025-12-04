@@ -23,6 +23,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' existing 
 // var queuePrivateDNSZoneName = 'privatelink.queue.${environment().suffixes.storage}'
 // var tablePrivateDNSZoneName = 'privatelink.table.${environment().suffixes.storage}'
 
+
 // AVM module for Blob Private Endpoint with private DNS zone
 module blobPrivateEndpoint 'br/public:avm/res/network/private-endpoint:0.11.0' = if (enableBlob) {
   name: 'blob-private-endpoint-deployment'

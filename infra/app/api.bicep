@@ -19,6 +19,7 @@ param enableBlob bool = true
 param enableQueue bool = false
 param enableTable bool = false
 param enableFile bool = false
+param subnetResourceId string
 
 @allowed(['SystemAssigned', 'UserAssigned'])
 param identityType string = 'UserAssigned'
@@ -61,6 +62,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
   name: applicationInsightsName
 }
 
+
 // Create a Flex Consumption Function App to host the API
 module api 'br/public:avm/res/web/site:0.15.1' = {
   name: '${serviceName}-flex-consumption'
@@ -70,6 +72,9 @@ module api 'br/public:avm/res/web/site:0.15.1' = {
     location: location
     tags: union(tags, { 'azd-service-name': serviceName })
     serverFarmResourceId: appServicePlanId
+    publicNetworkAccess: 'Disabled'
+    httpsOnly: true
+    storageAccountUseIdentityAuthentication: true
     managedIdentities: {
       systemAssigned: identityType == 'SystemAssigned'
       userAssignedResourceIds: [
@@ -101,6 +106,39 @@ module api 'br/public:avm/res/web/site:0.15.1' = {
     }
     virtualNetworkSubnetId: !empty(virtualNetworkSubnetId) ? virtualNetworkSubnetId : null
     appSettingsKeyValuePairs: allAppSettings
+  }
+}
+
+module apiPrivateEndpoint 'br/public:avm/res/network/private-endpoint:0.11.0' = {
+  name: 'func-private-endpoint-deployment'
+  params: {
+    name: 'func-private-endpoint'
+    location: location
+    tags: tags
+    subnetResourceId: subnetResourceId
+    privateLinkServiceConnections: [
+      {
+        name: 'funcPrivateLinkConnection'
+        properties: {
+          privateLinkServiceId: api.outputs.resourceId
+          groupIds: [
+            'sites'
+          ]
+        }
+      }
+    ]
+    customDnsConfigs: []
+    privateDnsZoneGroup: null
+    // Creates private DNS zone and links
+    // privateDnsZoneGroup: {
+    //   name: 'blobPrivateDnsZoneGroup'
+    //   privateDnsZoneGroupConfigs: [
+    //     {
+    //       name: 'storageBlobARecord'
+    //       privateDnsZoneResourceId: enableBlob ? privateDnsZoneBlobDeployment.outputs.resourceId : ''
+    //     }
+    //   ]
+    // }
   }
 }
 
