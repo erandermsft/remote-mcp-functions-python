@@ -1,0 +1,7 @@
+POST http://localhost:7071/api/index
+Content-Type: application/json
+
+{
+  "prefix_list": [""],
+  "index_name": "other-index"
+}

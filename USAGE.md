@@ -26,14 +26,62 @@ Replace the resource group name if you are targeting a different RG.
 
 ## 3. Package the Function App
 
-From the `src` directory, build the deployment package using Azure Functions Core Tools:
+From the `src/mcp` directory, build the deployment package using Azure Functions Core Tools:
 
 ```powershell
-cd ..\src
+cd ..\src\mcp
 func pack --output ..\dist\remote-mcp.zip
 ```
 
 Adjust the output path/name if desired. Ensure you delete or recreate the package whenever the code changes.
+
+### Working with Multiple Function Apps (e.g., `mcp` and `indexing`)
+
+Each Function App lives in its own subfolder under `src` (for example `src/mcp` and `src/indexing`). Treat each folder as an independent Azure Functions project:
+
+1. **Dependencies** – Place a dedicated `requirements.txt` in every app folder. Install them separately:
+
+  ```powershell
+  cd src\mcp
+  python -m venv .venv
+  .venv\Scripts\activate
+  pip install -r requirements.txt
+   
+  cd ..\indexing
+  python -m venv .venv
+  .venv\Scripts\activate
+  pip install -r requirements.txt
+  ```
+
+2. **Local debugging** – Run the Functions host from the specific folder you want to test:
+
+  ```powershell
+  cd src\mcp
+  func start
+   
+  cd ..\indexing
+  func start
+  ```
+
+3. **Packaging/Deployment** – When you need to deploy a given app, run `func pack` (or `func azure functionapp publish`) from that app’s folder so only its files are included in the ZIP.
+
+This structure lets you keep separate dependencies, settings, and deployment pipelines for the MCP server and the indexing Durable Functions app while sharing the same repository.
+
+> **Reminder:** Before running either app locally, update the corresponding `local.settings.json` with your own storage accounts, service endpoints, and secrets. Each folder keeps its own `local.settings.json`, so ensure both are configured.
+
+### Running the Indexing Pipeline Locally
+
+- From `src/indexing`, you can trigger the Durable Functions indexing pipeline via the provided HTTP file:
+
+  ```powershell
+  cd src/indexing
+  func start
+  # in another terminal or VS Code REST client
+  code .\run.http
+  ```
+
+  Use VS Code’s REST client or `curl` to execute the requests defined in `run.http` after the host starts.
+- Double-check that `src/indexing/local.settings.json` contains the correct endpoint URLs, connection strings, and API keys required by the pipeline before invoking the HTTP request.
 
 ## 4. Zip Deploy to the Function App
 

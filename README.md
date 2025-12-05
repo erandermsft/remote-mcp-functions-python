@@ -50,10 +50,10 @@ An Azure Storage Emulator is needed for this particular sample because we will s
 
 ## Run your MCP Server locally from the terminal
 
-1. Change to the src folder in a new terminal window:
+1. Change to the `src/mcp` folder in a new terminal window:
 
    ```shell
-   cd src
+    cd src/mcp
    ```
 
 1. Install Python dependencies:
@@ -272,7 +272,7 @@ azd deploy
 
 ## Source Code
 
-The function code for the `get_snippet` and `save_snippet` endpoints are defined in the Python files in the `src` directory. The MCP function annotations expose these functions as MCP Server tools.
+The function code for the `get_snippet` and `save_snippet` endpoints are defined in the Python files under `src/mcp`. The MCP function annotations expose these functions as MCP Server tools.
 
 Here's the actual code from the function_app.py file:
 

@@ -1,0 +1,13 @@
+# Uncomment to enable Azure Monitor OpenTelemetry
+# Ref: aka.ms/functions-azure-monitor-python
+# azure-monitor-opentelemetry
+azure-ai-documentintelligence
+azure-functions
+azure-functions-durable
+azure-storage-blob
+azure-identity
+urllib3
+azure-search-documents
+openai
+chonkie
+tiktoken
