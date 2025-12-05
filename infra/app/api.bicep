@@ -20,6 +20,10 @@ param enableQueue bool = false
 param enableTable bool = false
 param enableFile bool = false
 param subnetResourceId string
+param diEndpoint string
+param openAIEndpoint string
+param searchServiceEndpoint string
+
 
 @allowed(['SystemAssigned', 'UserAssigned'])
 param identityType string = 'UserAssigned'
@@ -144,6 +148,21 @@ resource api 'Microsoft.Web/sites@2025-03-01' = {
         name: runtimeName
         version: runtimeVersion
       }
+    }
+  }
+  resource appSettings 'config' = {
+    name: 'appsettings'
+    properties: {
+      AzureWebJobsStorage__accountName: stg.name
+      AzureWebJobsStorage__clientId: identityClientId
+      AzureWebJobsStorage__credential : 'managedidentity'
+      AzureWebJobsFeatureFlags: 'EnableWorkerIndexing'
+      AZURE_CLIENT_ID: identityClientId
+      // APPINSIGHTS_INSTRUMENTATIONKEY: appInsights.properties.InstrumentationKey
+      SOURCE_STORAGE_ACCOUNT_NAME: stg.name
+      DI_ENDPOINT: diEndpoint
+      AZURE_OPENAI_ENDPOINT: openAIEndpoint
+      SEARCH_SERVICE_ENDPOINT: searchServiceEndpoint
     }
   }
 }

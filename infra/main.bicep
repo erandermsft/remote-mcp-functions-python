@@ -53,10 +53,7 @@ param apiUserAssignedIdentityName string = ''
 param applicationInsightsName string = ''
 param appServicePlanName string = ''
 param logAnalyticsName string = ''
-param resourceGroupName string = ''
 param storageAccountName string = ''
-param vNetName string
-param vNetRGName string
 @description('Id of the user identity to be used for testing and debugging. This is not required in production. Leave empty if not needed.')
 param principalId string = deployer().objectId
 @description('Specifies the resource ID of the subnet for Function App virtual network integration.')
@@ -69,16 +66,6 @@ var tags = { 'azd-env-name': environmentName }
 var functionAppName = !empty(apiServiceName) ? apiServiceName : '${abbrs.webSitesFunctions}api-${resourceToken}'
 var deploymentStorageContainerName = 'app-package-${take(functionAppName, 32)}-${take(toLower(uniqueString(functionAppName, resourceToken)), 7)}'
 
-// Organize resources in a resource group
-// resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-//   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
-//   location: location
-//   tags: tags
-// }
-
-// resource vnetrg 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (vnetEnabled) {
-//   name: vNetRGName
-// }
 
 // User assigned managed identity to be used by the function app to reach storage and other dependencies
 // Assign specific roles to this identity in the RBAC module
@@ -127,6 +114,9 @@ module api './app/api.bicep' = {
     deploymentStorageContainerName: deploymentStorageContainerName
     identityId: apiUserAssignedIdentity.outputs.resourceId
     identityClientId: apiUserAssignedIdentity.outputs.clientId
+    diEndpoint: docintel.outputs.endpoint
+    openAIEndpoint: openai.outputs.endpoint
+    searchServiceEndpoint: search.outputs.endpoint
     appSettings: {
     }
     virtualNetworkSubnetId: vnetEnabled ? appSubnetResourceId : ''
@@ -154,7 +144,7 @@ module storage './app/storage.bicep' = {
 var storageEndpointConfig = {
   enableBlob: true  // Required for AzureWebJobsStorage, .zip deployment, Event Hubs trigger and Timer trigger checkpointing
   enableQueue: true  // Required for Durable Functions and MCP trigger
-  enableTable: false  // Required for Durable Functions and OpenAI triggers and bindings
+  enableTable: true  // Required for Durable Functions and OpenAI triggers and bindings
   enableFiles: false   // Not required, used in legacy scenarios
   allowUserIdentityPrincipal: true   // Allow interactive user identity to access for testing and debugging
 }
@@ -176,34 +166,76 @@ module rbac 'app/rbac.bicep' = {
   }
 }
 
-// Virtual Network & private endpoint to blob storage
-// module serviceVirtualNetwork 'app/vnet.bicep' =  if (vnetEnabled) {
-//   name: 'serviceVirtualNetwork'
-//   //scope: vnetrg
-//   params: {
-//     location: location
-//     appSubnetName: appSubnetName
-//     peSubnetName: peSubnetName
-//     tags: tags
-//     vNetName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
-//   }
-// }
-
 module storagePrivateEndpoint 'app/storage-PrivateEndpoint.bicep' = if (vnetEnabled) {
   name: 'servicePrivateEndpoint'
  // scope: rg
   params: {
     location: location
     tags: tags
-    virtualNetworkName: !empty(vNetName) ? vNetName : '${abbrs.networkVirtualNetworks}${resourceToken}'
     subnetResourceId: vnetEnabled ?  peSubnetResourceId : '' // Keep conditional check for safety, though module won't run if !vnetEnabled
     resourceName: storage.outputs.storageAccountName
     enableBlob: storageEndpointConfig.enableBlob
     enableQueue: storageEndpointConfig.enableQueue
     enableTable: storageEndpointConfig.enableTable
-    virtualNetworkResourceGroup: vNetRGName
   }
 }
+module openai 'app/openai.bicep' = {
+  name: 'openaiDeployment'
+ // scope: rg
+  params: {
+    name: 'openai-${resourceToken}'
+    location: location
+    tags: tags
+    publicNetworkAccess: 'Disabled'
+    subnetResourceId: peSubnetResourceId
+    managedIdentityPrincipalId: apiUserAssignedIdentity.outputs.principalId
+  }
+} 
+module search 'app/search.bicep' = {
+  name: 'searchDeployment'
+ // scope: rg
+  params: {
+    name: 'search-${resourceToken}'
+    location: location
+    tags: tags
+    sku: {
+      name: 'basic'
+    }
+    disableLocalAuth: true
+    openAIName: openai.outputs.name
+    pesubnetResourceId: peSubnetResourceId
+    managedIdentityPrincipalId: apiUserAssignedIdentity.outputs.principalId
+  }
+}
+
+module docintel 'app/docintel.bicep' = {
+  name: 'docintelDeployment'
+ // scope: rg
+  params: {
+    name: 'docintel-${resourceToken}'
+    location: location
+    tags: tags
+    sku: {
+      name: 'S0'
+    }
+    //Should probably use separate storage accounts for Functions host and document storage, but this is just an exmaple
+    sourceStorageAccountName: storage.outputs.storageAccountName
+    publicNetworkAccess: 'Disabled'
+    subnetResourceId: peSubnetResourceId
+    managedIdentityPrincipalId: apiUserAssignedIdentity.outputs.principalId
+  }
+}
+//This is needed if you want to enable on-demand indexing of new documents from the function app
+// module eventgrid 'app/eventgrid.bicep' = {
+//   name: 'eventgridSystemTopic'
+//  // scope: rg
+//   params: {
+//     location: location
+//     tags: tags
+//     storageAccountName: storage.outputs.storageAccountName
+//     systemTopicName: 'stg-eventgrid-${resourceToken}'
+//   }
+// }
 
 // Monitor application with Azure Monitor - Log Analytics and Application Insights
 // module logAnalytics 'br/public:avm/res/operational-insights/workspace:0.11.1' = {

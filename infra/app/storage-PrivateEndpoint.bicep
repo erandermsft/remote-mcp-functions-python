@@ -1,5 +1,3 @@
-param virtualNetworkName string
-param virtualNetworkResourceGroup string
 param subnetResourceId string
 @description('Specifies the storage account resource name')
 param resourceName string
@@ -9,10 +7,7 @@ param enableBlob bool = true
 param enableQueue bool = false
 param enableTable bool = false
 
-// resource vnet 'Microsoft.Network/virtualNetworks@2021-08-01' existing = {
-//   name: virtualNetworkName
-//   scope: resourceGroup(virtualNetworkResourceGroup)
-// }
+
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2021-09-01' existing = {
   name: resourceName
